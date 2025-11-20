@@ -81,6 +81,29 @@ Recommended `.env` keys for the backend (add to your environment or `.env`):
    - Inspect DB: `SELECT failed_login_attempts, locked_until FROM users WHERE username='devadmin';`
    - To immediately unlock (DB admin): `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE username = 'devadmin';`
 
+## Pruebas finales ejecutadas
+
+- Comando de login usado (respuesta contiene `accessToken`, `refreshToken` y `user`):
+
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"devadmin","password":"12345678"}'
+```
+
+- Comando para validar endpoint protegido `profile` usando el `accessToken` devuelto:
+
+```bash
+# token extraído del JSON de login
+curl -H "Authorization: Bearer <ACCESS_TOKEN>" http://localhost:3000/api/users/profile
+```
+
+- Resultado observado durante la prueba local:
+  - `login` devolvió `accessToken` y `refreshToken`.
+  - `GET /api/users/profile` devolvió el objeto del usuario con `failedLoginAttempts: 0`, `lockedUntil: null` y la propiedad `passwordHash` (hash bcrypt) presente en la respuesta.
+
+Estas pruebas confirman que el flujo de autenticación funciona correctamente después de la migración a UUID y las correcciones de mapeo `password` → `passwordHash`.
+
 ## Notes for maintainers
 
 - The code uses `User.passwordHash` property to read/write the DB `password` column; do not rename the DB column without updating the entity mapping.
