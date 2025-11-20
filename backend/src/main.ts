@@ -1,20 +1,55 @@
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: ['error', 'warn', 'log', 'debug'],
+  });
 
-  // Swagger (API docs)
+  const configService = app.get(ConfigService);
+  const logger = new Logger('Bootstrap');
+
+  // CORS
+  app.enableCors({
+    origin: configService.get('FRONTEND_URL'),
+    credentials: true,
+  });
+
+  // Prefijo global para API
+  app.setGlobalPrefix('api');
+
+  // Validación global
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  );
+
+  // Swagger Documentation
   const config = new DocumentBuilder()
-    .setTitle('ERP Carnicería API')
-    .setDescription('API docs de desarrollo')
-    .setVersion('0.1')
+    .setTitle('ERP Carnicerías API')
+    .setDescription('API REST para sistema ERP de carnicerías')
+    .setVersion('1.0')
     .addBearerAuth()
+    .addTag('auth', 'Autenticación y autorización')
     .build();
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  const port = configService.get('PORT', 3000);
+  await app.listen(port);
+
+  logger.log(`🚀 Aplicación corriendo en: http://localhost:${port}`);
+  logger.log(`📚 Documentación en: http://localhost:${port}/api/docs`);
 }
+
 bootstrap();

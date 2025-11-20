@@ -1,0 +1,292 @@
+// backend/src/database/seeds/seed-database.ts
+import { DataSource } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+
+/**
+ * Script para crear datos iniciales en la base de datos
+ * Ejecutar con: npm run seed
+ */
+
+async function seed() {
+  // Configurar conexión a la base de datos
+  const dataSource = new DataSource({
+    type: 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    username: process.env.DB_USERNAME || 'postgres',
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE || 'erp_carniceria',
+    entities: ['src/**/*.entity{.ts,.js}'],
+    synchronize: false,
+  });
+
+  await dataSource.initialize();
+  console.log('✅ Conectado a la base de datos');
+
+  try {
+    // 1. Crear permisos
+    console.log('📝 Creando permisos...');
+    const permissions = [
+      // Ventas
+      { module: 'sales', action: 'create', description: 'Crear ventas' },
+      { module: 'sales', action: 'read', description: 'Ver ventas' },
+      { module: 'sales', action: 'cancel', description: 'Cancelar ventas' },
+      { module: 'sales', action: 'refund', description: 'Hacer devoluciones' },
+
+      // Inventario
+      { module: 'inventory', action: 'read', description: 'Ver inventario' },
+      {
+        module: 'inventory',
+        action: 'adjust',
+        description: 'Ajustar inventario',
+      },
+      {
+        module: 'inventory',
+        action: 'transfer',
+        description: 'Crear traslados',
+      },
+
+      // Compras
+      {
+        module: 'purchases',
+        action: 'create',
+        description: 'Crear órdenes de compra',
+      },
+      { module: 'purchases', action: 'read', description: 'Ver compras' },
+      {
+        module: 'purchases',
+        action: 'approve',
+        description: 'Aprobar compras',
+      },
+      {
+        module: 'purchases',
+        action: 'receive',
+        description: 'Recibir mercancía',
+      },
+
+      // Productos
+      { module: 'products', action: 'create', description: 'Crear productos' },
+      { module: 'products', action: 'read', description: 'Ver productos' },
+      {
+        module: 'products',
+        action: 'update',
+        description: 'Modificar productos',
+      },
+      {
+        module: 'products',
+        action: 'delete',
+        description: 'Eliminar productos',
+      },
+
+      // Reportes
+      {
+        module: 'reports',
+        action: 'sales',
+        description: 'Ver reportes de ventas',
+      },
+      {
+        module: 'reports',
+        action: 'inventory',
+        description: 'Ver reportes de inventario',
+      },
+      {
+        module: 'reports',
+        action: 'profitability',
+        description: 'Ver reportes de utilidades',
+      },
+
+      // Usuarios
+      { module: 'users', action: 'create', description: 'Crear usuarios' },
+      { module: 'users', action: 'read', description: 'Ver usuarios' },
+      { module: 'users', action: 'update', description: 'Modificar usuarios' },
+      { module: 'users', action: 'delete', description: 'Eliminar usuarios' },
+
+      // Configuración
+      { module: 'settings', action: 'read', description: 'Ver configuración' },
+      {
+        module: 'settings',
+        action: 'update',
+        description: 'Modificar configuración',
+      },
+    ];
+
+    for (const perm of permissions) {
+      await dataSource.query(
+        `INSERT INTO permissions (module, action, description, created_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (module, action) DO NOTHING`,
+        [perm.module, perm.action, perm.description],
+      );
+    }
+    console.log('✅ Permisos creados');
+
+    // 2. Crear roles
+    console.log('📝 Creando roles...');
+
+    // Rol Administrador (todos los permisos)
+    const [adminRole] = await dataSource.query(
+      `INSERT INTO roles (name, description, is_system, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      ['Administrador', 'Acceso total al sistema', true],
+    );
+
+    // Asignar todos los permisos al administrador
+    await dataSource.query(
+      `INSERT INTO role_permissions (role_id, permission_id)
+       SELECT $1, id FROM permissions
+       ON CONFLICT DO NOTHING`,
+      [adminRole.id],
+    );
+
+    // Rol Gerente
+    const [gerenteRole] = await dataSource.query(
+      `INSERT INTO roles (name, description, is_system, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      ['Gerente', 'Gestión completa de sucursal', true],
+    );
+
+    // Permisos para gerente
+    const gerentePerms = [
+      'sales:create',
+      'sales:read',
+      'sales:cancel',
+      'inventory:read',
+      'inventory:adjust',
+      'inventory:transfer',
+      'purchases:create',
+      'purchases:read',
+      'purchases:approve',
+      'purchases:receive',
+      'products:create',
+      'products:read',
+      'products:update',
+      'reports:sales',
+      'reports:inventory',
+      'reports:profitability',
+      'users:read',
+    ];
+
+    for (const perm of gerentePerms) {
+      const [module, action] = perm.split(':');
+      await dataSource.query(
+        `INSERT INTO role_permissions (role_id, permission_id)
+         SELECT $1, id FROM permissions WHERE module = $2 AND action = $3
+         ON CONFLICT DO NOTHING`,
+        [gerenteRole.id, module, action],
+      );
+    }
+
+    // Rol Cajero
+    const [cajeroRole] = await dataSource.query(
+      `INSERT INTO roles (name, description, is_system, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      ['Cajero', 'Operación de punto de venta', true],
+    );
+
+    // Permisos para cajero
+    const cajeroPerms = [
+      'sales:create',
+      'sales:read',
+      'products:read',
+      'inventory:read',
+    ];
+
+    for (const perm of cajeroPerms) {
+      const [module, action] = perm.split(':');
+      await dataSource.query(
+        `INSERT INTO role_permissions (role_id, permission_id)
+         SELECT $1, id FROM permissions WHERE module = $2 AND action = $3
+         ON CONFLICT DO NOTHING`,
+        [cajeroRole.id, module, action],
+      );
+    }
+
+    // Rol Almacenista
+    const [almacenistaRole] = await dataSource.query(
+      `INSERT INTO roles (name, description, is_system, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      ['Almacenista', 'Gestión de inventario y recepción', true],
+    );
+
+    // Permisos para almacenista
+    const almacenistaPerms = [
+      'inventory:read',
+      'inventory:adjust',
+      'inventory:transfer',
+      'purchases:read',
+      'purchases:receive',
+      'products:read',
+    ];
+
+    for (const perm of almacenistaPerms) {
+      const [module, action] = perm.split(':');
+      await dataSource.query(
+        `INSERT INTO role_permissions (role_id, permission_id)
+         SELECT $1, id FROM permissions WHERE module = $2 AND action = $3
+         ON CONFLICT DO NOTHING`,
+        [almacenistaRole.id, module, action],
+      );
+    }
+
+    console.log('✅ Roles creados');
+
+    // 3. Crear usuario administrador por defecto
+    console.log('📝 Creando usuario administrador...');
+    const passwordHash = await bcrypt.hash('Admin123!', 12);
+
+    const [adminUser] = await dataSource.query(
+      `INSERT INTO users (
+        username, email, password_hash, first_name, last_name,
+        is_active, created_at, updated_at
+      )
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+       ON CONFLICT (username) DO UPDATE SET username = EXCLUDED.username
+       RETURNING id`,
+      ['admin', 'admin@carniceria.com', passwordHash, 'Admin', 'Sistema', true],
+    );
+
+    // Asignar rol administrador
+    await dataSource.query(
+      `INSERT INTO user_roles (user_id, role_id, company_id, branch_id)
+       VALUES ($1, $2, NULL, NULL)
+       ON CONFLICT DO NOTHING`,
+      [adminUser.id, adminRole.id],
+    );
+
+    console.log('✅ Usuario administrador creado');
+    console.log('');
+    console.log('🎉 ¡Datos iniciales creados exitosamente!');
+    console.log('');
+    console.log('📋 Credenciales del administrador:');
+    console.log('   Username: admin');
+    console.log('   Password: Admin123!');
+    console.log('');
+    console.log(
+      '⚠️  IMPORTANTE: Cambie la contraseña después del primer login',
+    );
+  } catch (error) {
+    console.error('❌ Error al crear datos iniciales:', error);
+    throw error;
+  } finally {
+    await dataSource.destroy();
+  }
+}
+
+// Ejecutar seed
+seed()
+  .then(() => {
+    console.log('✅ Proceso completado');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('❌ Error:', error);
+    process.exit(1);
+  });

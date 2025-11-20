@@ -1,7 +1,17 @@
+import { Role } from './role.entity';
 export declare class User {
-    id: number;
+    id: string;
     email: string;
-    password: string;
-    first_name: string;
-    last_name: string;
+    passwordHash: string;
+    username: string;
+    firstName: string;
+    lastName: string;
+    isActive: boolean;
+    failedLoginAttempts: number;
+    lockedUntil?: Date;
+    lastLogin?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    get fullName(): string;
+    roles?: Role[];
 }

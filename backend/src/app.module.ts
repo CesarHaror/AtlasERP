@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import RedisProvider from './redis.provider';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -18,8 +20,8 @@ import RedisProvider from './redis.provider';
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: false,
     }),
-    // UsersModule
-    (require('./modules/users/users.module').UsersModule),
+    AuthModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisProvider],
