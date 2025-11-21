@@ -1,5 +1,4 @@
-import {
-  Controller,
+import { Controller,
   Get,
   Post,
   Body,
@@ -9,8 +8,8 @@ import {
   Delete,
   UseGuards,
   UnauthorizedException,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+  ParseIdPipe,
+ } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -48,14 +47,14 @@ export class UsersController {
 
   @Get(':id')
   @Roles('Administrador', 'Gerente')
-  findOne(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+  findOne(@Param('id', new ParseIdPipe({ version: '4' })) id: string) {
     return this.usersService.findOne(id);
   }
 
   @Patch(':id')
   @Roles('Administrador', 'Gerente')
   update(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('id', new ParseIdPipe({ version: '4' })) id: string,
     @Body() updateUserDto: UpdateUserDto,
   ) {
     return this.usersService.update(id, updateUserDto);
@@ -63,7 +62,7 @@ export class UsersController {
 
   @Patch(':id/password')
   updatePassword(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('id', new ParseIdPipe({ version: '4' })) id: string,
     @Body() updatePasswordDto: UpdatePasswordDto,
     @CurrentUser() user: any,
   ) {
@@ -80,13 +79,13 @@ export class UsersController {
 
   @Patch(':id/toggle-active')
   @Roles('Administrador')
-  toggleActive(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+  toggleActive(@Param('id', new ParseIdPipe({ version: '4' })) id: string) {
     return this.usersService.toggleActive(id);
   }
 
   @Delete(':id')
   @Roles('Administrador')
-  remove(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+  remove(@Param('id', new ParseIdPipe({ version: '4' })) id: string) {
     return this.usersService.remove(id);
   }
 }
